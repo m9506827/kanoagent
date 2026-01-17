@@ -9,13 +9,40 @@ from functools import wraps
 
 logger = logging.getLogger(__name__)
 
-# API 過載相關錯誤碼
-OVERLOAD_ERRORS = ["503", "429", "overloaded", "rate limit", "UNAVAILABLE", "SERVICE_UNAVAILABLE", "RESOURCE_EXHAUSTED"]
+# API 過載相關錯誤碼（可重試）
+OVERLOAD_ERRORS = ["503", "overloaded", "rate limit", "UNAVAILABLE", "SERVICE_UNAVAILABLE"]
+
+# 配額用盡相關錯誤碼（不可重試，需要切換方案）
+QUOTA_EXHAUSTED_INDICATORS = ["quota exceeded", "exceeded your current quota", "limit: 0"]
 
 def is_overload_error(error_msg: str) -> bool:
-    """檢查是否為 API 過載錯誤"""
+    """
+    檢查是否為 API 過載錯誤（可重試）
+    
+    注意：429 錯誤需要區分：
+    - Rate Limit（請求過於頻繁）- 可重試
+    - Quota Exceeded（配額用盡）- 不可重試
+    """
     error_msg_lower = error_msg.lower()
-    return any(code.lower() in error_msg_lower for code in OVERLOAD_ERRORS)
+    
+    # 先檢查是否為配額用盡（不可重試）
+    if "429" in error_msg and any(indicator in error_msg_lower for indicator in QUOTA_EXHAUSTED_INDICATORS):
+        return False
+    
+    # 檢查是否為其他過載錯誤（可重試）
+    if any(code.lower() in error_msg_lower for code in OVERLOAD_ERRORS):
+        return True
+    
+    # 429 但沒有配額用盡指標，視為 rate limit（可重試）
+    if "429" in error_msg:
+        return True
+    
+    return False
+
+def is_quota_exceeded_error(error_msg: str) -> bool:
+    """檢查是否為配額用盡錯誤（不可重試）"""
+    error_msg_lower = error_msg.lower()
+    return "429" in error_msg and any(indicator in error_msg_lower for indicator in QUOTA_EXHAUSTED_INDICATORS)
 
 def calculate_retry_delay(attempt: int, base_delay: float, backoff: float, max_delay: float = 60.0) -> float:
     """
