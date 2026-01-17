@@ -1,0 +1,10 @@
+crewai>=1.0.0
+crewai-tools>=0.1.0
+langchain-openai>=0.1.0
+python-dotenv>=1.0.0
+requests>=2.31.0  # 用於 API 檢查和重試機制
+
+# 免費 LLM 選項（可選）
+langchain-community>=0.3.0  # 用於 Ollama
+langchain-huggingface>=0.1.0  # 用於 Hugging Face
+langchain-google-genai>=2.0.0  # 用於 Google Gemini
