@@ -33,11 +33,21 @@ wheels/
 *.swp
 *.swo
 *~
+*.code-workspace
+.cursor/
 
 # Output files
 output/
+logs/
 *.log
+*.tmp
+*.temp
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Local configuration (keep example files)
+# .env is already ignored above
+# config.example.env should be tracked
