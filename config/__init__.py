@@ -2,6 +2,7 @@ from .llm_config import (
     get_llm_config,
     get_llm_for_role,
     get_retry_config,
+    get_all_roles,
     DEFAULT_LLM_CONFIG,
     validate_role_mapping,
     get_config_key_for_agent,
@@ -23,6 +24,7 @@ __all__ = [
     'get_llm_config',
     'get_llm_for_role',
     'get_retry_config',
+    'get_all_roles',
     'DEFAULT_LLM_CONFIG',
     # 驗證和映射函數
     'validate_role_mapping',

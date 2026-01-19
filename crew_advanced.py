@@ -22,31 +22,56 @@ import time
 
 load_dotenv()
 
-# 設置日誌
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# 設置日誌（使用統一的日誌系統）
+from utils.logger_config import setup_logger
+logger = setup_logger("crew_advanced", logging.INFO)
 
 # 初始化 API 日誌記錄器
 api_logger = get_api_logger()
 
 def check_ollama_available() -> bool:
-    """檢查 Ollama 是否可用（包括服務運行和模組可導入）"""
+    """
+    檢查 Ollama 是否可用（包括服務運行和模組可導入）
+    
+    返回 False 的情況：
+    1. langchain_community 模組不可導入（未安裝）
+    2. Ollama 服務未運行（無法連接到 http://localhost:11434）
+    3. 網路連接問題（timeout 或連接被拒絕）
+    
+    詳細說明請參考：OLLAMA_SETUP_GUIDE.md
+    """
     # 檢查模組是否可導入
     try:
         from langchain_community.llms import Ollama
     except ImportError:
-        logger.debug("langchain_community 模組不可用")
+        logger.debug("langchain_community 模組不可用（可能未安裝：pip install langchain-community）")
         return False
     
     # 檢查服務是否運行
     try:
         response = requests.get("http://localhost:11434/api/tags", timeout=2)
-        return response.status_code == 200
-    except:
-        logger.debug("Ollama 服務不可用")
+        if response.status_code == 200:
+            # 可選：檢查是否有模型可用
+            try:
+                models = response.json().get('models', [])
+                if models:
+                    logger.debug(f"Ollama 可用，已下載 {len(models)} 個模型")
+                else:
+                    logger.warning("Ollama 服務運行中，但未下載任何模型")
+            except:
+                pass
+            return True
+        else:
+            logger.debug(f"Ollama 服務返回錯誤狀態碼: {response.status_code}")
+            return False
+    except requests.exceptions.ConnectionError:
+        logger.debug("Ollama 服務不可用（無法連接到 localhost:11434，請確保 Ollama 已啟動）")
+        return False
+    except requests.exceptions.Timeout:
+        logger.debug("Ollama 服務連接超時（請檢查服務是否正常運行）")
+        return False
+    except Exception as e:
+        logger.debug(f"Ollama 服務檢查失敗: {e}")
         return False
 
 def create_llm_instance(model_name: str, llm_type: str, agent_name: str = "unknown"):
@@ -231,8 +256,12 @@ def create_llm_instance(model_name: str, llm_type: str, agent_name: str = "unkno
     # 預設返回原始模型名稱（讓 CrewAI 自行處理）
     return model_name
 
-def create_kano_crew_advanced():
-    """創建通用型軟體開發團隊 - 進階配置"""
+def create_kano_crew_advanced(user_requirements_text: str = None):
+    """創建通用型軟體開發團隊 - 進階配置
+    
+    Args:
+        user_requirements_text: 用戶通過交互式問卷提供的需求文本（可選）
+    """
     
     # 檢查必要的 API Key
     google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -359,19 +388,49 @@ def create_kano_crew_advanced():
     print("\n" + "="*70)
     print("LLM 配置（每個 Role 獨立配置）")
     print("="*70)
-    print(f"{'Role':<20} {'Type':<8} {'Model':<35} {'Retry':<10}")
+    print(f"{'Role':<20} {'Type':<8} {'Model':<35} {'Retry':<10} {'Status':<10}")
     print("-" * 70)
     for role_key, role_name in roles.items():
         config = llm_configs[role_key]
+        original_config = get_llm_config(role_key)
+        
+        # 檢查是否因為 Ollama 不可用而自動降級
+        status = ""
+        if original_config["type"] == "local" and config["type"] == "api":
+            status = "⚠️ 降級"
+        elif config["type"] == "local":
+            status = "✓ Local"
+        else:
+            status = "✓ API"
+        
         print(
             f"{role_name:<20} "
             f"{config['type'].upper():<8} "
             f"{config['model']:<35} "
-            f"{config['retry_times']}x/{config['retry_delay']}s"
+            f"{config['retry_times']}x/{config['retry_delay']}s "
+            f"{status:<10}"
         )
-    print("="*70 + "\n")
+    print("="*70)
     
-    # 創建所有任務
+    # 檢查是否有降級情況
+    downgraded_roles = []
+    for role_key, role_name in roles.items():
+        original_config = get_llm_config(role_key)
+        if original_config["type"] == "local" and llm_configs[role_key]["type"] == "api":
+            downgraded_roles.append(role_name)
+    
+    if downgraded_roles:
+        print(f"\n⚠️  警告：以下角色配置為 local model，但 Ollama 不可用，已自動降級為 API：")
+        for role in downgraded_roles:
+            print(f"  - {role}")
+        print("\n💡 解決方案：")
+        print("  1. 確保 Ollama 已安裝並運行：https://ollama.ai/")
+        print("  2. 確保已下載對應的模型（如：ollama pull gemma3:4b）")
+        print("  3. 或將這些角色的配置改為使用 API model")
+    
+    print()
+    
+    # 創建所有任務（傳遞用戶需求文本）
     tasks = create_tasks(
         pre_sales_consultant,
         product_manager,
@@ -380,6 +439,7 @@ def create_kano_crew_advanced():
         developer,
         reviewer,
         technical,
+        user_requirements_text=user_requirements_text,
     )
     
     # 創建 Crew（配置重試機制）

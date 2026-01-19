@@ -18,6 +18,7 @@ def create_tasks(
     developer,
     reviewer,
     technical,
+    user_requirements_text: str = None,
 ):
     """創建所有任務
     
@@ -29,11 +30,47 @@ def create_tasks(
         developer: DeveloperAgent 實例
         reviewer: ReviewerAgent 實例
         technical: TechnicalAgent 實例
+        user_requirements_text: 用戶通過交互式問卷提供的需求文本（可選）
     """
     
-    # 任務 0: 資深售前顧問 - 需求澄清
-    requirements_clarification_task = Task(
-        description=f"""作為資深售前顧問，你的任務是與客戶（用戶）互動，通過結構化的問題澄清軟體需求。
+    # 構建任務描述
+    if user_requirements_text:
+        # 如果用戶已提供需求，Agent 只需要整理和補充
+        task_description = f"""作為資深售前顧問，你的任務是基於客戶已提供的需求回答，整理並補充完整的需求澄清文檔。
+
+**客戶已提供的需求信息：**
+
+{user_requirements_text}
+
+**你的任務：**
+1. 仔細閱讀客戶提供的所有需求回答
+2. 識別需求中的模糊點、矛盾點和潛在風險
+3. 對於不清楚或缺失的部分，進行合理的推斷和補充
+4. 確認需求的優先級和重要性
+5. 整理並總結所有澄清後的需求
+
+**注意事項：**
+- 要基於客戶提供的實際回答進行整理
+- 對於客戶未回答的問題，可以根據上下文進行合理推斷
+- 要識別並記錄技術約束、業務規則、整合需求等關鍵信息
+- 要確認時程、預算、資源等專案約束條件
+- 最終要產出一份清晰、完整的需求澄清文檔
+
+**輸出要求：**
+產出一份結構化的需求澄清文檔，包含：
+- 業務背景與目標
+- 用戶需求與使用場景
+- 功能需求清單（含優先級）
+- 非功能性需求
+- 技術約束與限制
+- 數據需求
+- 整合需求
+- UI/UX 需求
+- 專案約束（時程、預算、資源）
+- 成功標準與驗收條件"""
+    else:
+        # 如果用戶未提供需求，Agent 需要模擬對話
+        task_description = f"""作為資深售前顧問，你的任務是與客戶（用戶）互動，通過結構化的問題澄清軟體需求。
 
 {format_questions_for_agent()}
 
@@ -62,7 +99,11 @@ def create_tasks(
 - 整合需求
 - UI/UX 需求
 - 專案約束（時程、預算、資源）
-- 成功標準與驗收條件""",
+- 成功標準與驗收條件"""
+    
+    # 任務 0: 資深售前顧問 - 需求澄清
+    requirements_clarification_task = Task(
+        description=task_description,
         agent=pre_sales_consultant,
         expected_output="完整的需求澄清文檔（Markdown 格式），包含所有澄清後的需求信息，結構清晰、內容詳盡，字數不少於 1500 字",
     )
